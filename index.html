@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,700;9..144,900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   :root{
     /* Bio-tech editorial palette */
@@ -701,9 +702,20 @@
     display:none;
   }
   .shock-banner.show{display:block}
+
+  /* ============ FONDO SETA 3D ============ */
+  #bg3d{
+    position:fixed; inset:0;
+    width:100vw; height:100vh;
+    z-index:0; pointer-events:none;
+    opacity:.42;
+    -webkit-mask-image:radial-gradient(ellipse 70% 80% at 78% 60%, #000 30%, transparent 78%);
+    mask-image:radial-gradient(ellipse 70% 80% at 78% 60%, #000 30%, transparent 78%);
+  }
 </style>
 </head>
 <body>
+<canvas id="bg3d"></canvas>
 
 <header>
   <div class="brand">
@@ -1581,5 +1593,93 @@ initCharts();
 syncUI();
 update();
 </script>
+
+<script>
+/* ===== FONDO: SETA 3D PROCEDURAL (Three.js) ===== */
+(function(){
+  if(typeof THREE === 'undefined'){ return; }
+  const canvas = document.getElementById('bg3d');
+  const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  camera.position.set(0, 0.4, 8);
+  camera.lookAt(0, 0.2, 0);
+
+  // --- Perfil de la seta (radio, altura) revolucionado en torno al eje Y ---
+  const pts = [
+    [0.001, 0.00],
+    [0.62 , 0.00],
+    [0.50 , 0.28],
+    [0.44 , 1.10],   // tallo esbelto
+    [0.50 , 1.62],
+    [0.74 , 1.92],   // arranque del sombrero
+    [1.98 , 1.82],   // ala del sombrero (vuelo)
+    [1.92 , 2.10],
+    [1.42 , 2.46],
+    [0.72 , 2.66],
+    [0.001, 2.76],   // ápice
+  ].map(p => new THREE.Vector2(p[0], p[1]));
+  const lathe = new THREE.LatheGeometry(pts, 64);
+  lathe.translate(0, -1.38, 0);   // centrar verticalmente
+  lathe.computeVertexNormals();
+
+  const group = new THREE.Group();
+
+  // Cuerpo: material crema con sombreado suave
+  const body = new THREE.Mesh(lathe, new THREE.MeshStandardMaterial({
+    color:0xECE7D7, roughness:0.78, metalness:0.06, flatShading:false
+  }));
+  group.add(body);
+
+  // Malla lima sutil (estética micelio / bio-tech)
+  const wire = new THREE.Mesh(lathe, new THREE.MeshBasicMaterial({
+    color:0xC7F955, wireframe:true, transparent:true, opacity:0.10
+  }));
+  wire.scale.setScalar(1.002);
+  group.add(wire);
+
+  scene.add(group);
+
+  // Iluminación
+  const key  = new THREE.DirectionalLight(0xffffff, 1.25); key.position.set(5, 9, 6);  scene.add(key);
+  const rim  = new THREE.DirectionalLight(0xC7F955, 0.55);  rim.position.set(-6, 3, -4); scene.add(rim);
+  const warm = new THREE.DirectionalLight(0xF4A14A, 0.25);  warm.position.set(2, -4, 3); scene.add(warm);
+  scene.add(new THREE.AmbientLight(0x3a3f38, 0.9));
+
+  function resize(){
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    // desplazar la seta a la derecha en pantallas anchas
+    group.position.x = camera.aspect > 1 ? 2.6 : 0.4;
+    group.position.y = camera.aspect > 1 ? -0.3 : -1.2;
+    const s = camera.aspect > 1 ? 1 : 0.8;
+    group.scale.setScalar(s);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  let t = 0, raf;
+  function animate(){
+    raf = requestAnimationFrame(animate);
+    t += 0.0035;
+    group.rotation.y = t;
+    group.rotation.x = Math.sin(t * 0.5) * 0.06;
+    group.position.y += Math.sin(t * 0.8) * 0.0006; // respiración leve
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // pausar cuando la pestaña no es visible (rendimiento)
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){ cancelAnimationFrame(raf); }
+    else { animate(); }
+  });
+})();
+</script>
+
 </body>
 </html>
